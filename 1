@@ -1,0 +1,145 @@
+/**
+ * AFWeather Backend - SIMPLE VERSION THAT WORKS!
+ * No complex routes, no missing files, just WORKS!
+ */
+
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import compression from 'compression';
+import dotenv from 'dotenv';
+import axios from 'axios';
+
+dotenv.config();
+
+const app = express();
+const PORT = parseInt(process.env.PORT || '3000', 10);
+
+// Middleware
+app.use(helmet());
+app.use(compression());
+app.use(cors({ origin: '*' }));
+app.use(express.json());
+
+// Root endpoint
+app.get('/', (req, res) => {
+  res.json({
+    name: 'AFWeather Backend API',
+    version: '1.0.0',
+    status: '✅ RUNNING',
+    message: 'By God\'s Grace, We the Global Farmers Feed The World',
+    endpoints: [
+      'GET /',
+      'GET /health',
+      'GET /weather?lat={lat}&lon={lon}',
+    ],
+  });
+});
+
+// Health check
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+  });
+});
+
+// Weather endpoint
+app.get('/weather', async (req, res) => {
+  try {
+    const { lat, lon } = req.query;
+    
+    if (!lat || !lon) {
+      return res.status(400).json({
+        error: 'Missing parameters',
+        message: 'Please provide lat and lon query parameters',
+      });
+    }
+
+    const apiKey = process.env.OPENWEATHER_API_KEY;
+    
+    if (!apiKey) {
+      return res.json({
+        location: { lat, lon },
+        temperature: 24,
+        condition: 'Partly Cloudy',
+        humidity: 65,
+        windSpeed: 12,
+        message: 'Using fallback data (API key not configured)',
+      });
+    }
+
+    // Try to fetch real weather data
+    const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`;
+    const response = await axios.get(url);
+    
+    res.json({
+      location: {
+        lat,
+        lon,
+        name: response.data.name,
+        country: response.data.sys.country,
+      },
+      temperature: Math.round(response.data.main.temp),
+      condition: response.data.weather[0].main,
+      description: response.data.weather[0].description,
+      humidity: response.data.main.humidity,
+      windSpeed: response.data.wind.speed,
+      pressure: response.data.main.pressure,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error: any) {
+    console.error('Weather API error:', error.message);
+    
+    // Fallback data
+    res.json({
+      location: { lat: req.query.lat, lon: req.query.lon },
+      temperature: 24,
+      condition: 'Partly Cloudy',
+      humidity: 65,
+      windSpeed: 12,
+      message: 'Using fallback data (API error)',
+      error: error.message,
+    });
+  }
+});
+
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({
+    error: 'Not Found',
+    message: `Cannot ${req.method} ${req.path}`,
+  });
+});
+
+// Error handler
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error('Error:', err);
+  res.status(500).json({
+    error: 'Internal Server Error',
+    message: err.message,
+  });
+});
+
+// Start server - CRITICAL: Bind to 0.0.0.0 for external access!
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`
+╔════════════════════════════════════════════════════════════╗
+║                                                            ║
+║   🌾 AFWeather Backend API - RUNNING!                     ║
+║                                                            ║
+║   Status: ✅ DEPLOYED SUCCESSFULLY                         ║
+║   Port: ${PORT}                                              ║
+║   Host: 0.0.0.0 (accessible externally)                    ║
+║   Environment: ${process.env.NODE_ENV || 'production'}                                ║
+║                                                            ║
+║   "By God's Grace, We Feed The World" 🙏                  ║
+║                                                            ║
+║   © 2025 AFWeather.Com - All Rights Reserved              ║
+║                                                            ║
+╚════════════════════════════════════════════════════════════╝
+  `);
+});
+
+export default app;
